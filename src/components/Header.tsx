@@ -1,12 +1,13 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Search, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
   
   return (
     <header className="sticky top-0 z-50 w-full bg-betting-dark border-b border-betting-card">
@@ -43,12 +44,20 @@ export default function Header() {
           </div>
           
           <div className="hidden md:flex items-center gap-2">
-            <Link to="/login">
-              <Button variant="outline" size="sm">Log In</Button>
-            </Link>
-            <Link to="/signup">
-              <Button variant="default" size="sm">Sign Up</Button>
-            </Link>
+            {user ? (
+              <Button variant="outline" size="sm" onClick={() => signOut()}>
+                Sign Out
+              </Button>
+            ) : (
+              <>
+                <Link to="/auth/login">
+                  <Button variant="outline" size="sm">Log In</Button>
+                </Link>
+                <Link to="/auth/signup">
+                  <Button variant="default" size="sm">Sign Up</Button>
+                </Link>
+              </>
+            )}
           </div>
           
           <Button
@@ -102,12 +111,27 @@ export default function Header() {
           </nav>
           
           <div className="flex flex-col gap-2 mt-4">
-            <Link to="/login" onClick={() => setIsMenuOpen(false)}>
-              <Button variant="outline" className="w-full">Log In</Button>
-            </Link>
-            <Link to="/signup" onClick={() => setIsMenuOpen(false)}>
-              <Button variant="default" className="w-full">Sign Up</Button>
-            </Link>
+            {user ? (
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={() => {
+                  signOut();
+                  setIsMenuOpen(false);
+                }}
+              >
+                Sign Out
+              </Button>
+            ) : (
+              <>
+                <Link to="/auth/login" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="outline" className="w-full">Log In</Button>
+                </Link>
+                <Link to="/auth/signup" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="default" className="w-full">Sign Up</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>
