@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
@@ -15,11 +14,6 @@ export default function Hero() {
           to predict game outcomes with high accuracy.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/predictions">
-            <Button size="lg" className="w-full sm:w-auto">
-              View Predictions
-            </Button>
-          </Link>
           <Link to="/about">
             <Button size="lg" variant="outline" className="w-full sm:w-auto">
               How It Works

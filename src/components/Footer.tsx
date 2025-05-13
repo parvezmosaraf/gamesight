@@ -27,11 +27,6 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/predictions" className="text-muted-foreground hover:text-betting-accent transition-colors">
-                  Predictions
-                </Link>
-              </li>
-              <li>
                 <Link to="/about" className="text-muted-foreground hover:text-betting-accent transition-colors">
                   How It Works
                 </Link>

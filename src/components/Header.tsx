@@ -24,9 +24,6 @@ export default function Header() {
             <Link to="/" className="text-sm font-medium text-foreground hover:text-betting-accent transition-colors">
               Home
             </Link>
-            <Link to="/predictions" className="text-sm font-medium text-foreground hover:text-betting-accent transition-colors">
-              Predictions
-            </Link>
             <Link to="/about" className="text-sm font-medium text-foreground hover:text-betting-accent transition-colors">
               How It Works
             </Link>
@@ -93,13 +90,6 @@ export default function Header() {
               onClick={() => setIsMenuOpen(false)}
             >
               Home
-            </Link>
-            <Link 
-              to="/predictions" 
-              className="text-lg font-medium p-2 hover:bg-betting-card rounded-md"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Predictions
             </Link>
             <Link 
               to="/about" 
