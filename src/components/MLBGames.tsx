@@ -4,6 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import axios from 'axios';
+import React, { useState } from 'react';
+import { getGeminiPrediction, GeminiPredictionResponse } from '@/services/geminiService';
+import PredictionModal from './PredictionModal';
 
 // MLB Stats API base URL
 const BASE_URL = 'https://statsapi.mlb.com/api/v1';
@@ -89,6 +92,41 @@ export const MLBGames = () => {
     retry: 3
   });
 
+  // Prediction modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | undefined>(undefined);
+  const [modalPrediction, setModalPrediction] = useState<GeminiPredictionResponse | undefined>(undefined);
+  const [modalTeams, setModalTeams] = useState<{ home: string; away: string }>({ home: '', away: '' });
+  const [modalPredictionMarkdown, setModalPredictionMarkdown] = useState<string | undefined>(undefined);
+
+  const handleGetPrediction = async (game: MLBGame) => {
+    setModalTeams({ home: game.teams.home.team.teamName, away: game.teams.away.team.teamName });
+    setModalOpen(true);
+    setModalLoading(true);
+    setModalError(undefined);
+    setModalPrediction(undefined);
+    setModalPredictionMarkdown(undefined);
+    try {
+      const prediction = await getGeminiPrediction({
+        homeTeam: game.teams.home.team.teamName,
+        awayTeam: game.teams.away.team.teamName,
+        league: 'MLB',
+        date: game.gameDate,
+      });
+      if (typeof prediction === 'string') {
+        setModalPredictionMarkdown(prediction);
+      } else if (typeof prediction === 'object' && prediction !== null && (prediction as any).reasoning) {
+        setModalPredictionMarkdown((prediction as any).reasoning);
+      }
+      setModalPrediction(undefined);
+    } catch (err: any) {
+      setModalError(err.message || 'Failed to get prediction');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="text-center p-8">
@@ -118,71 +156,90 @@ export const MLBGames = () => {
 
   return (
     <div className="space-y-4">
+      <PredictionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        loading={modalLoading}
+        error={modalError}
+        prediction={modalPrediction}
+        homeTeam={modalTeams.home}
+        awayTeam={modalTeams.away}
+        predictionMarkdown={modalPredictionMarkdown}
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {games.map((game) => (
-          <Card key={game.gamePk} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-2">
-              <div className="flex flex-row items-center justify-between mb-2">
-                <CardTitle className="text-sm text-gray-500">
-                  {formatGameTime(game.gameDate)}
-                </CardTitle>
-                <Badge 
-                  variant={
-                    game.status.abstractGameState === 'Final' ? 'secondary' :
-                    game.status.abstractGameState === 'Live' ? 'destructive' :
-                    'default'
-                  }
-                >
-                  {getGameStatus(game)}
-                </Badge>
-              </div>
-              {(game.seriesDescription || game.description) && (
-                <p className="text-xs text-muted-foreground">
-                  {game.seriesDescription || game.description}
-                </p>
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={getTeamLogo(game.teams.home.team.id)}
-                    alt={game.teams.home.team.name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://www.mlbstatic.com/team-logos/mlb-default.svg';
-                    }}
-                  />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{game.teams.home.team.teamName}</span>
-                    <span className="text-xs text-muted-foreground">{game.teams.home.team.name}</span>
+          <div key={game.gamePk} className="relative group">
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex flex-row items-center justify-between mb-2">
+                  <CardTitle className="text-sm text-gray-500">
+                    {formatGameTime(game.gameDate)}
+                  </CardTitle>
+                  <Badge 
+                    variant={
+                      game.status.abstractGameState === 'Final' ? 'secondary' :
+                      game.status.abstractGameState === 'Live' ? 'destructive' :
+                      'default'
+                    }
+                  >
+                    {getGameStatus(game)}
+                  </Badge>
+                </div>
+                {(game.seriesDescription || game.description) && (
+                  <p className="text-xs text-muted-foreground">
+                    {game.seriesDescription || game.description}
+                  </p>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={getTeamLogo(game.teams.home.team.id)}
+                      alt={game.teams.home.team.name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://www.mlbstatic.com/team-logos/mlb-default.svg';
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{game.teams.home.team.teamName}</span>
+                      <span className="text-xs text-muted-foreground">{game.teams.home.team.name}</span>
+                    </div>
+                  </div>
+                  <div className="font-bold">
+                    {typeof game.teams.home.score === 'number' ? game.teams.home.score : '-'}
                   </div>
                 </div>
-                <div className="font-bold">
-                  {typeof game.teams.home.score === 'number' ? game.teams.home.score : '-'}
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={getTeamLogo(game.teams.away.team.id)}
-                    alt={game.teams.away.team.name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://www.mlbstatic.com/team-logos/mlb-default.svg';
-                    }}
-                  />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{game.teams.away.team.teamName}</span>
-                    <span className="text-xs text-muted-foreground">{game.teams.away.team.name}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={getTeamLogo(game.teams.away.team.id)}
+                      alt={game.teams.away.team.name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://www.mlbstatic.com/team-logos/mlb-default.svg';
+                      }}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{game.teams.away.team.teamName}</span>
+                      <span className="text-xs text-muted-foreground">{game.teams.away.team.name}</span>
+                    </div>
+                  </div>
+                  <div className="font-bold">
+                    {typeof game.teams.away.score === 'number' ? game.teams.away.score : '-'}
                   </div>
                 </div>
-                <div className="font-bold">
-                  {typeof game.teams.away.score === 'number' ? game.teams.away.score : '-'}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            {/* Get Prediction button on hover */}
+            <button
+              className="absolute left-1/2 -translate-x-1/2 bottom-4 opacity-0 group-hover:opacity-100 transition bg-primary text-white px-4 py-2 rounded shadow-lg font-semibold z-10"
+              onClick={() => handleGetPrediction(game)}
+            >
+              Get Prediction
+            </button>
+          </div>
         ))}
       </div>
     </div>

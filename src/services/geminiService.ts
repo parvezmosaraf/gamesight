@@ -1,8 +1,8 @@
-
 // This is a mock implementation that simulates calls to the Gemini API
 // In a real app, this would make actual API calls to Google's Gemini API
 
 import { toast } from "sonner";
+import axios from 'axios';
 
 // Mock team logos
 const teamLogos: Record<string, string> = {
@@ -296,5 +296,66 @@ export const fetchPredictionById = async (id: string): Promise<GamePrediction | 
     console.error('Error fetching prediction details:', error);
     toast.error('Failed to load game details. Please try again.');
     return null;
+  }
+};
+
+export interface GeminiPredictionRequest {
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  date: string;
+  players?: string[];
+  extraStats?: Record<string, any>;
+}
+
+export interface GeminiPredictionResponse {
+  winningTeam: string;
+  probability: number;
+  reasoning: string;
+  keyPlayers: string[];
+}
+
+export const getGeminiPrediction = async (input: GeminiPredictionRequest): Promise<GeminiPredictionResponse> => {
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+  const endpoint = 'https://api.openai.com/v1/chat/completions';
+
+  // Compose a prompt for OpenAI
+  const prompt = `Given the following match details, provide a detailed, markdown-formatted analysis and prediction for the game.\n\nFirst, start your response with a summary block in this format (use these exact labels):\n\nWinning Team: <team name>\nWin Probability: <number>%\nKey Factors ${input.homeTeam}:\n- ...\n- ...\nKey Factors ${input.awayTeam}:\n- ...\n- ...\n\nAfter this summary block, provide the rest of your analysis in markdown, including:\n- A summary of the matchup.\n- A final prediction and reasoning.\n- Key players to watch (format as a nested markdown list, with team name as the parent bullet and players as indented sub-bullets):\n  - New York Knicks\n    - Julius Randle: A crucial component of the Knicks' offense and defense.\n    - Jalen Brunson: Known for his playmaking ability.\n  - Boston Celtics\n    - Jayson Tatum: The team's leading scorer.\n    - Jaylen Brown: Provides strong perimeter defense.\n\nMatch details:\nLeague: ${input.league}\nDate: ${input.date}\nHome Team: ${input.homeTeam}\nAway Team: ${input.awayTeam}\n${input.players ? `Players: ${input.players.join(', ')}` : ''}\n${input.extraStats ? `Extra Stats: ${JSON.stringify(input.extraStats)}` : ''}\n\nFormat your response in markdown, with clear sections and bullet points where appropriate.`;
+
+  try {
+    const response = await axios.post(
+      endpoint,
+      {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 400
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      }
+    );
+    const text = response.data.choices?.[0]?.message?.content || '';
+    let parsed: GeminiPredictionResponse | null = null;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // Fallback: simple regex extraction (improve as needed)
+      const winningTeam = /"?winningTeam"?\s*[:=]\s*"([^"]+)"/i.exec(text)?.[1] || '';
+      const probability = parseInt(/"?probability"?\s*[:=]\s*(\d+)/i.exec(text)?.[1] || '0', 10);
+      const reasoning = /"?reasoning"?\s*[:=]\s*"([^"]+)"/i.exec(text)?.[1] || text;
+      const keyPlayersMatch = /"?keyPlayers"?\s*[:=]\s*\[([^\]]*)\]/i.exec(text)?.[1];
+      const keyPlayers = keyPlayersMatch ? keyPlayersMatch.split(',').map(s => s.replace(/"/g, '').trim()) : [];
+      parsed = { winningTeam, probability, reasoning, keyPlayers };
+    }
+    return parsed;
+  } catch (error: any) {
+    console.error('Error calling OpenAI API:', error.response?.data || error.message);
+    throw new Error('Failed to get prediction from OpenAI');
   }
 };

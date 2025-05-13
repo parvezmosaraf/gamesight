@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
+import React, { useState } from 'react';
+import { getGeminiPrediction, GeminiPredictionResponse } from '@/services/geminiService';
+import PredictionModal from './PredictionModal';
 
 const formatGameTime = (dateStr: string) => {
   try {
@@ -70,6 +73,42 @@ export const NBAGames = () => {
     retry: 3 // Retry failed requests 3 times
   });
 
+  // Prediction modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | undefined>(undefined);
+  const [modalPrediction, setModalPrediction] = useState<GeminiPredictionResponse | undefined>(undefined);
+  const [modalTeams, setModalTeams] = useState<{ home: string; away: string }>({ home: '', away: '' });
+  const [modalPredictionMarkdown, setModalPredictionMarkdown] = useState<string | undefined>(undefined);
+
+  const handleGetPrediction = async (game: NBAGame) => {
+    setModalTeams({ home: game.home_team.full_name, away: game.visitor_team.full_name });
+    setModalOpen(true);
+    setModalLoading(true);
+    setModalError(undefined);
+    setModalPrediction(undefined);
+    setModalPredictionMarkdown(undefined);
+    try {
+      const prediction = await getGeminiPrediction({
+        homeTeam: game.home_team.full_name,
+        awayTeam: game.visitor_team.full_name,
+        league: 'NBA',
+        date: game.date,
+      });
+      // If the response is a markdown string, store it for rendering
+      if (typeof prediction === 'string') {
+        setModalPredictionMarkdown(prediction);
+      } else if (typeof prediction === 'object' && prediction !== null && (prediction as any).reasoning) {
+        setModalPredictionMarkdown((prediction as any).reasoning);
+      }
+      setModalPrediction(undefined); // fallback to markdown only
+    } catch (err: any) {
+      setModalError(err.message || 'Failed to get prediction');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   console.log('Games data:', games);
 
   if (isLoading) {
@@ -101,63 +140,82 @@ export const NBAGames = () => {
 
   return (
     <div className="space-y-4">
+      <PredictionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        loading={modalLoading}
+        error={modalError}
+        prediction={modalPrediction}
+        homeTeam={modalTeams.home}
+        awayTeam={modalTeams.away}
+        predictionMarkdown={modalPredictionMarkdown}
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {games.map((game) => (
-          <Card key={game.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm text-gray-500">
-                {formatGameTime(game.date)}
-              </CardTitle>
-              <Badge 
-                variant={
-                  game.status === 'Final' ? 'secondary' :
-                  game.status.includes('Q') || game.status === 'Halftime' ? 'destructive' :
-                  'default'
-                }
-              >
-                {game.status || 'Scheduled'}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={getTeamLogo(game.home_team.abbreviation)}
-                    alt={game.home_team.full_name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://cdn.nba.com/logos/nba/default/primary/L/logo.svg';
-                    }}
-                  />
-                  <span>{game.home_team.city} {game.home_team.name}</span>
+          <div key={game.id} className="relative group">
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-sm text-gray-500">
+                  {formatGameTime(game.date)}
+                </CardTitle>
+                <Badge 
+                  variant={
+                    game.status === 'Final' ? 'secondary' :
+                    game.status.includes('Q') || game.status === 'Halftime' ? 'destructive' :
+                    'default'
+                  }
+                >
+                  {game.status || 'Scheduled'}
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={getTeamLogo(game.home_team.abbreviation)}
+                      alt={game.home_team.full_name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://cdn.nba.com/logos/nba/default/primary/L/logo.svg';
+                      }}
+                    />
+                    <span>{game.home_team.city} {game.home_team.name}</span>
+                  </div>
+                  <div className="font-bold">
+                    {typeof game.home_team_score === 'number' ? game.home_team_score : '-'}
+                  </div>
                 </div>
-                <div className="font-bold">
-                  {typeof game.home_team_score === 'number' ? game.home_team_score : '-'}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={getTeamLogo(game.visitor_team.abbreviation)}
+                      alt={game.visitor_team.full_name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://cdn.nba.com/logos/nba/default/primary/L/logo.svg';
+                      }}
+                    />
+                    <span>{game.visitor_team.city} {game.visitor_team.name}</span>
+                  </div>
+                  <div className="font-bold">
+                    {typeof game.visitor_team_score === 'number' ? game.visitor_team_score : '-'}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={getTeamLogo(game.visitor_team.abbreviation)}
-                    alt={game.visitor_team.full_name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = 'https://cdn.nba.com/logos/nba/default/primary/L/logo.svg';
-                    }}
-                  />
-                  <span>{game.visitor_team.city} {game.visitor_team.name}</span>
-                </div>
-                <div className="font-bold">
-                  {typeof game.visitor_team_score === 'number' ? game.visitor_team_score : '-'}
-                </div>
-              </div>
-              {game.postseason && (
-                <div className="mt-2">
-                  <Badge variant="outline">Playoffs</Badge>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                {game.postseason && (
+                  <div className="mt-2">
+                    <Badge variant="outline">Playoffs</Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            {/* Get Prediction button on hover */}
+            <button
+              className="absolute left-1/2 -translate-x-1/2 bottom-4 opacity-0 group-hover:opacity-100 transition bg-primary text-white px-4 py-2 rounded shadow-lg font-semibold z-10"
+              onClick={() => handleGetPrediction(game)}
+            >
+              Get Prediction
+            </button>
+          </div>
         ))}
       </div>
     </div>

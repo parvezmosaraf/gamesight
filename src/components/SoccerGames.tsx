@@ -4,6 +4,9 @@ import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { formatInTimeZone } from 'date-fns-tz';
 import axios from 'axios';
+import React, { useState } from 'react';
+import { getGeminiPrediction, GeminiPredictionResponse } from '@/services/geminiService';
+import PredictionModal from './PredictionModal';
 
 const API_KEY = '7779b541d6d3b6677b193ba851ee6642';
 const BASE_URL = 'https://v3.football.api-sports.io';
@@ -92,6 +95,41 @@ export const SoccerGames = () => {
     retry: 3
   });
 
+  // Prediction modal state
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState<string | undefined>(undefined);
+  const [modalPrediction, setModalPrediction] = useState<GeminiPredictionResponse | undefined>(undefined);
+  const [modalTeams, setModalTeams] = useState<{ home: string; away: string }>({ home: '', away: '' });
+  const [modalPredictionMarkdown, setModalPredictionMarkdown] = useState<string | undefined>(undefined);
+
+  const handleGetPrediction = async (game: SoccerGame) => {
+    setModalTeams({ home: game.teams.home.name, away: game.teams.away.name });
+    setModalOpen(true);
+    setModalLoading(true);
+    setModalError(undefined);
+    setModalPrediction(undefined);
+    setModalPredictionMarkdown(undefined);
+    try {
+      const prediction = await getGeminiPrediction({
+        homeTeam: game.teams.home.name,
+        awayTeam: game.teams.away.name,
+        league: game.league.name,
+        date: game.fixture.date,
+      });
+      if (typeof prediction === 'string') {
+        setModalPredictionMarkdown(prediction);
+      } else if (typeof prediction === 'object' && prediction !== null && (prediction as any).reasoning) {
+        setModalPredictionMarkdown((prediction as any).reasoning);
+      }
+      setModalPrediction(undefined);
+    } catch (err: any) {
+      setModalError(err.message || 'Failed to get prediction');
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="text-center p-8">
@@ -121,61 +159,80 @@ export const SoccerGames = () => {
 
   return (
     <div className="space-y-4">
+      <PredictionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        loading={modalLoading}
+        error={modalError}
+        prediction={modalPrediction}
+        homeTeam={modalTeams.home}
+        awayTeam={modalTeams.away}
+        predictionMarkdown={modalPredictionMarkdown}
+      />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {games.map((game) => (
-          <Card key={game.fixture.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm text-gray-500">
-                {formatGameTime(game.fixture.date)}
-              </CardTitle>
-              <Badge 
-                variant={
-                  game.fixture.status.short === 'FT' ? 'secondary' :
-                  game.fixture.status.short === '1H' || game.fixture.status.short === '2H' || game.fixture.status.short === 'HT' ? 'destructive' :
-                  'default'
-                }
-              >
-                {getGameStatus(game.fixture.status)}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={game.teams.home.logo}
-                    alt={game.teams.home.name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = '/soccer-default-logo.png';
-                    }}
-                  />
-                  <span>{game.teams.home.name}</span>
+          <div key={game.fixture.id} className="relative group">
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-sm text-gray-500">
+                  {formatGameTime(game.fixture.date)}
+                </CardTitle>
+                <Badge 
+                  variant={
+                    game.fixture.status.short === 'FT' ? 'secondary' :
+                    game.fixture.status.short === '1H' || game.fixture.status.short === '2H' || game.fixture.status.short === 'HT' ? 'destructive' :
+                    'default'
+                  }
+                >
+                  {getGameStatus(game.fixture.status)}
+                </Badge>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={game.teams.home.logo}
+                      alt={game.teams.home.name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = '/soccer-default-logo.png';
+                      }}
+                    />
+                    <span>{game.teams.home.name}</span>
+                  </div>
+                  <div className="font-bold">
+                    {game.goals.home !== null ? game.goals.home : '-'}
+                  </div>
                 </div>
-                <div className="font-bold">
-                  {game.goals.home !== null ? game.goals.home : '-'}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <img
+                      src={game.teams.away.logo}
+                      alt={game.teams.away.name}
+                      className="w-8 h-8"
+                      onError={(e) => {
+                        e.currentTarget.src = '/soccer-default-logo.png';
+                      }}
+                    />
+                    <span>{game.teams.away.name}</span>
+                  </div>
+                  <div className="font-bold">
+                    {game.goals.away !== null ? game.goals.away : '-'}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <img
-                    src={game.teams.away.logo}
-                    alt={game.teams.away.name}
-                    className="w-8 h-8"
-                    onError={(e) => {
-                      e.currentTarget.src = '/soccer-default-logo.png';
-                    }}
-                  />
-                  <span>{game.teams.away.name}</span>
+                <div className="mt-2 text-sm text-gray-500">
+                  {game.league.name} - {game.league.country}
                 </div>
-                <div className="font-bold">
-                  {game.goals.away !== null ? game.goals.away : '-'}
-                </div>
-              </div>
-              <div className="mt-2 text-sm text-gray-500">
-                {game.league.name} - {game.league.country}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            {/* Get Prediction button on hover */}
+            <button
+              className="absolute left-1/2 -translate-x-1/2 bottom-4 opacity-0 group-hover:opacity-100 transition bg-primary text-white px-4 py-2 rounded shadow-lg font-semibold z-10"
+              onClick={() => handleGetPrediction(game)}
+            >
+              Get Prediction
+            </button>
+          </div>
         ))}
       </div>
     </div>
