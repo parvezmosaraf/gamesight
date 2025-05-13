@@ -2,7 +2,6 @@ import React from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Hero from '@/components/Hero';
-import PredictionStats from '@/components/PredictionStats';
 import { SportsGames } from '@/components/SportsGames';
 
 export default function Index() {
@@ -14,9 +13,6 @@ export default function Index() {
         <Hero />
         
         <div className="container py-10">
-          <h2 className="text-2xl font-bold mb-6">Analytics Overview</h2>
-          <PredictionStats />
-          
           <div className="mt-12">
             <SportsGames />
           </div>
